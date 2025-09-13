@@ -18,34 +18,77 @@ jobs:
           - target: mips_24kc
             arch: mips
             subtarget: mt7628
-            sdk_url: "https://downloads.openwrt.org/releases/23.05.5/targets/ramips/mt7628/openwrt-sdk-23.05.5-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
-            sdk_dir: "openwrt-sdk-23.05.5-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64"
+            sdk_url: "https://downloads.openwrt.org/snapshots/targets/ramips/mt7628/openwrt-sdk-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+            sdk_dir: "openwrt-sdk-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64"
           - target: mipsel_24kc
             arch: mipsel
             subtarget: mt7628
-            sdk_url: "https://downloads.openwrt.org/releases/23.05.5/targets/ramips/mt7628/openwrt-sdk-23.05.5-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
-            sdk_dir: "openwrt-sdk-23.05.5-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64"
+            sdk_url: "https://downloads.openwrt.org/snapshots/targets/ramips/mt7628/openwrt-sdk-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+            sdk_dir: "openwrt-sdk-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64"
           - target: arm_cortex-a7_neon-vfpv4
             arch: arm
             subtarget: cortex-a7
-            sdk_url: "https://downloads.openwrt.org/releases/23.05.5/targets/armvirt/64/openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
-            sdk_dir: "openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64"
+            sdk_url: "https://downloads.openwrt.org/snapshots/targets/armvirt/64/openwrt-sdk-armvirt-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+            sdk_dir: "openwrt-sdk-armvirt-64_gcc-12.3.0_musl.Linux-x86_64"
           - target: aarch64_cortex-a72
             arch: aarch64
             subtarget: cortex-a72
-            sdk_url: "https://downloads.openwrt.org/releases/23.05.5/targets/armvirt/64/openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
-            sdk_dir: "openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64"
+            sdk_url: "https://downloads.openwrt.org/snapshots/targets/armvirt/64/openwrt-sdk-armvirt-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+            sdk_dir: "openwrt-sdk-armvirt-64_gcc-12.3.0_musl.Linux-x86_64"
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Verify SDK URL
+      run: |
+        echo "Verifying SDK URL accessibility..."
+        echo "Target: ${{ matrix.target }}"
+        echo "SDK URL: ${{ matrix.sdk_url }}"
+        
+        # Test URL accessibility
+        if curl -I --connect-timeout 10 "${{ matrix.sdk_url }}" > /dev/null 2>&1; then
+          echo "✅ SDK URL is accessible"
+        else
+          echo "❌ SDK URL is not accessible"
+          echo "This may indicate:"
+          echo "1. The URL is incorrect"
+          echo "2. The OpenWRT release is no longer available"
+          echo "3. Network connectivity issues"
+          exit 1
+        fi
+
     - name: Setup OpenWRT SDK
       run: |
         echo "Downloading SDK for ${{ matrix.target }}..."
-        wget -q "${{ matrix.sdk_url }}"
+        echo "SDK URL: ${{ matrix.sdk_url }}"
+        wget "${{ matrix.sdk_url }}"
+        if [ $? -ne 0 ]; then
+          echo "ERROR: Failed to download SDK from ${{ matrix.sdk_url }}"
+          echo "Please check if the URL is correct and accessible"
+          exit 1
+        fi
+        
+        echo "Extracting SDK archive..."
         tar -xf "$(basename ${{ matrix.sdk_url }})"
+        if [ $? -ne 0 ]; then
+          echo "ERROR: Failed to extract SDK archive"
+          echo "Archive file: $(basename ${{ matrix.sdk_url }})"
+          ls -la "$(basename ${{ matrix.sdk_url }})"
+          exit 1
+        fi
+        
+        echo "Moving SDK directory..."
         mv "${{ matrix.sdk_dir }}" openwrt-sdk
+        if [ $? -ne 0 ]; then
+          echo "ERROR: Failed to move extracted SDK directory"
+          echo "Expected directory: ${{ matrix.sdk_dir }}"
+          echo "Available directories:"
+          ls -la
+          exit 1
+        fi
+        
+        echo "SDK setup completed successfully"
         echo "SDK_DIR=openwrt-sdk" >> $GITHUB_ENV
 
     - name: Setup build environment

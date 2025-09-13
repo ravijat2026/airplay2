@@ -1,0 +1,103 @@
+name: Build AirPlay 2 Lite for OpenWRT (Simple)
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-mips:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup OpenWRT SDK for MIPS
+      run: |
+        echo "Setting up OpenWRT SDK for MIPS..."
+        
+        # Try different SDK URLs
+        SDK_URLS=(
+          "https://downloads.openwrt.org/snapshots/targets/ramips/mt7628/openwrt-sdk-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+          "https://downloads.openwrt.org/releases/23.05.3/targets/ramips/mt7628/openwrt-sdk-23.05.3-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+          "https://downloads.openwrt.org/releases/22.03.5/targets/ramips/mt7628/openwrt-sdk-22.03.5-ramips-mt7628_gcc-11.2.0_musl.Linux-x86_64.tar.xz"
+        )
+        
+        SDK_DIRS=(
+          "openwrt-sdk-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64"
+          "openwrt-sdk-23.05.3-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64"
+          "openwrt-sdk-22.03.5-ramips-mt7628_gcc-11.2.0_musl.Linux-x86_64"
+        )
+        
+        SDK_SUCCESS=false
+        
+        for i in "${!SDK_URLS[@]}"; do
+          URL="${SDK_URLS[$i]}"
+          DIR="${SDK_DIRS[$i]}"
+          
+          echo "Trying SDK URL: $URL"
+          
+          if wget --timeout=30 --tries=3 "$URL"; then
+            echo "Download successful, extracting..."
+            if tar -xf "$(basename "$URL")"; then
+              echo "Extraction successful, moving directory..."
+              if mv "$DIR" openwrt-sdk; then
+                echo "SDK setup successful with URL: $URL"
+                SDK_SUCCESS=true
+                break
+              else
+                echo "Failed to move directory: $DIR"
+              fi
+            else
+              echo "Failed to extract archive"
+            fi
+          else
+            echo "Failed to download: $URL"
+          fi
+          
+          # Clean up failed attempt
+          rm -f "$(basename "$URL")"
+          rm -rf "$DIR"
+        done
+        
+        if [ "$SDK_SUCCESS" = false ]; then
+          echo "ERROR: All SDK download attempts failed"
+          echo "Available OpenWRT releases:"
+          curl -s "https://downloads.openwrt.org/releases/" | grep -o 'href="[^"]*"' | grep -E 'href="[0-9]+\.[0-9]+\.[0-9]+/"' | head -5
+          exit 1
+        fi
+
+    - name: Setup build environment
+      run: |
+        cd openwrt-sdk
+        echo "src-link airplay2-lite $GITHUB_WORKSPACE" >> feeds.conf.default
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: Configure build
+      run: |
+        cd openwrt-sdk
+        make defconfig
+        echo "CONFIG_PACKAGE_airplay2-lite=y" >> .config
+        echo "CONFIG_PACKAGE_libopenssl=y" >> .config
+        echo "CONFIG_PACKAGE_libavahi-client=y" >> .config
+        echo "CONFIG_PACKAGE_libavahi-common=y" >> .config
+        echo "CONFIG_PACKAGE_libdaemon=y" >> .config
+        echo "CONFIG_PACKAGE_alsa-lib=y" >> .config
+        make defconfig
+
+    - name: Build package
+      run: |
+        cd openwrt-sdk
+        make package/airplay2-lite/compile V=s
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: airplay2-lite-mips
+        path: openwrt-sdk/bin/packages/*/base/airplay2-lite_*.ipk
+        retention-days: 30
+      if: always()
