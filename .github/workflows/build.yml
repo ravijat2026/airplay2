@@ -54,6 +54,12 @@ jobs:
         echo "src-link airplay2-lite $GITHUB_WORKSPACE" >> feeds.conf.default
         ./scripts/feeds update -a
         ./scripts/feeds install -a
+        
+        # Verify package structure
+        echo "Package structure:"
+        ls -la package/airplay2-lite/
+        echo "Source files:"
+        ls -la package/airplay2-lite/src/
 
     - name: Configure build
       run: |
@@ -74,10 +80,14 @@ jobs:
         echo "Target: ${{ matrix.target }}"
         echo "Architecture: ${{ matrix.arch }}"
         echo "Subtarget: ${{ matrix.subtarget }}"
-        echo "Available packages:"
-        ls -la bin/packages/*/base/ | head -10
         echo "Package directory structure:"
         find . -name "*airplay*" -type f
+        echo "CMakeLists.txt location:"
+        find . -name "CMakeLists.txt" -type f
+        echo "Source files:"
+        find . -name "*.c" -path "*/airplay2-lite/*" | head -10
+        echo "Header files:"
+        find . -name "*.h" -path "*/airplay2-lite/*" | head -10
 
     - name: Build package
       run: |

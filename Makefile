@@ -9,9 +9,6 @@ PKG_SOURCE_URL:=https://github.com/yourusername/airplay2-lite.git
 PKG_SOURCE_VERSION:=HEAD
 PKG_MIRROR_HASH:=skip
 
-PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
-PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
-
 PKG_MAINTAINER:=Your Name <your.email@example.com>
 PKG_LICENSE:=MIT
 PKG_LICENSE_FILES:=LICENSE
