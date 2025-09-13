@@ -1,0 +1,112 @@
+name: Build AirPlay 2 Lite for OpenWRT
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  release:
+    types: [ published ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        target: [mips_24kc, mipsel_24kc, arm_cortex-a7_neon-vfpv4, aarch64_cortex-a72]
+        include:
+          - target: mips_24kc
+            arch: mips
+            subtarget: mt7628
+          - target: mipsel_24kc
+            arch: mipsel
+            subtarget: mt7628
+          - target: arm_cortex-a7_neon-vfpv4
+            arch: arm
+            subtarget: cortex-a7
+          - target: aarch64_cortex-a72
+            arch: aarch64
+            subtarget: cortex-a72
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup OpenWRT SDK
+      run: |
+        # Download OpenWRT SDK for the target architecture
+        if [ "${{ matrix.arch }}" = "mips" ]; then
+          SDK_URL="https://downloads.openwrt.org/releases/23.05.5/targets/ramips/mt7628/openwrt-sdk-23.05.5-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+          SDK_DIR="openwrt-sdk-23.05.5-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64"
+        elif [ "${{ matrix.arch }}" = "mipsel" ]; then
+          SDK_URL="https://downloads.openwrt.org/releases/23.05.5/targets/ramips/mt7628/openwrt-sdk-23.05.5-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+          SDK_DIR="openwrt-sdk-23.05.5-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64"
+        elif [ "${{ matrix.arch }}" = "arm" ]; then
+          SDK_URL="https://downloads.openwrt.org/releases/23.05.5/targets/armvirt/64/openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+          SDK_DIR="openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64"
+        elif [ "${{ matrix.arch }}" = "aarch64" ]; then
+          SDK_URL="https://downloads.openwrt.org/releases/23.05.5/targets/armvirt/64/openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+          SDK_DIR="openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64"
+        fi
+        
+        wget -q "$SDK_URL"
+        tar -xf "$(basename $SDK_URL)"
+        mv "$SDK_DIR" openwrt-sdk
+        echo "SDK_DIR=openwrt-sdk" >> $GITHUB_ENV
+
+    - name: Setup build environment
+      run: |
+        cd openwrt-sdk
+        echo "src-link airplay2-lite $GITHUB_WORKSPACE" >> feeds.conf.default
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: Configure build
+      run: |
+        cd openwrt-sdk
+        make defconfig
+        echo "CONFIG_PACKAGE_airplay2-lite=y" >> .config
+        make defconfig
+
+    - name: Build package
+      run: |
+        cd openwrt-sdk
+        make package/airplay2-lite/compile V=s
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: airplay2-lite-${{ matrix.target }}
+        path: openwrt-sdk/bin/packages/*/base/airplay2-lite_*.ipk
+        retention-days: 30
+
+  create-release:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Create release assets
+      run: |
+        mkdir -p release-assets
+        find artifacts -name "*.ipk" -exec cp {} release-assets/ \;
+        
+        # Create a combined package for easy installation
+        cd release-assets
+        tar -czf airplay2-lite-all-architectures.tar.gz *.ipk
+
+    - name: Upload to release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./release-assets/airplay2-lite-all-architectures.tar.gz
+        asset_name: airplay2-lite-all-architectures.tar.gz
+        asset_content_type: application/gzip
