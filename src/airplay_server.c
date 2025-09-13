@@ -116,14 +116,7 @@ int airplay_server_start(airplay_server_t *server) {
     
     // Initialize Avahi client for mDNS
     int error;
-    AvahiThreadedPoll *poll = avahi_threaded_poll_new();
-    if (!poll) {
-        syslog(LOG_ERR, "Failed to create Avahi threaded poll");
-        close(server->socket_fd);
-        return -1;
-    }
-    
-    server->avahi_client = avahi_client_new(avahi_threaded_poll_get(poll), 
+    server->avahi_client = avahi_client_new(avahi_threaded_poll_get(), 
                                            AVAHI_CLIENT_NO_FAIL, 
                                            avahi_client_callback, 
                                            server, &error);

@@ -9,6 +9,9 @@ PKG_SOURCE_URL:=https://github.com/yourusername/airplay2-lite.git
 PKG_SOURCE_VERSION:=HEAD
 PKG_MIRROR_HASH:=skip
 
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+
 PKG_MAINTAINER:=Your Name <your.email@example.com>
 PKG_LICENSE:=MIT
 PKG_LICENSE_FILES:=LICENSE
@@ -36,10 +39,23 @@ CMAKE_OPTIONS += \
 	-DWITH_AVAHI=ON \
 	-DWITH_ALSA=ON \
 	-DWITH_OPENSSL=ON \
-	-DWITH_SYSTEMD=OFF \
-	-DCMAKE_C_FLAGS="-Os -ffunction-sections -fdata-sections -mips32r2 -mtune=24kc" \
-	-DCMAKE_CXX_FLAGS="-Os -ffunction-sections -fdata-sections -mips32r2 -mtune=24kc" \
-	-DCMAKE_EXE_LINKER_FLAGS="-Wl,--gc-sections -Wl,--strip-all"
+	-DWITH_SYSTEMD=OFF
+
+# Optimize for size and target architecture
+TARGET_CFLAGS += -Os -ffunction-sections -fdata-sections
+TARGET_CXXFLAGS += -Os -ffunction-sections -fdata-sections
+TARGET_LDFLAGS += -Wl,--gc-sections -Wl,--strip-all
+
+# MIPS-specific optimizations
+ifeq ($(ARCH),mips)
+  TARGET_CFLAGS += -mips32r2 -mtune=24kc
+  TARGET_CXXFLAGS += -mips32r2 -mtune=24kc
+endif
+
+ifeq ($(ARCH),mipsel)
+  TARGET_CFLAGS += -mips32r2 -mtune=24kc
+  TARGET_CXXFLAGS += -mips32r2 -mtune=24kc
+endif
 
 define Package/airplay2-lite/install
 	$(INSTALL_DIR) $(1)/usr/bin

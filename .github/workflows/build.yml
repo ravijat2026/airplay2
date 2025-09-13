@@ -14,20 +14,27 @@ jobs:
     
     strategy:
       matrix:
-        target: [mips_24kc, mipsel_24kc, arm_cortex-a7_neon-vfpv4, aarch64_cortex-a72]
         include:
           - target: mips_24kc
             arch: mips
             subtarget: mt7628
+            sdk_url: "https://downloads.openwrt.org/releases/23.05.5/targets/ramips/mt7628/openwrt-sdk-23.05.5-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+            sdk_dir: "openwrt-sdk-23.05.5-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64"
           - target: mipsel_24kc
             arch: mipsel
             subtarget: mt7628
+            sdk_url: "https://downloads.openwrt.org/releases/23.05.5/targets/ramips/mt7628/openwrt-sdk-23.05.5-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+            sdk_dir: "openwrt-sdk-23.05.5-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64"
           - target: arm_cortex-a7_neon-vfpv4
             arch: arm
             subtarget: cortex-a7
+            sdk_url: "https://downloads.openwrt.org/releases/23.05.5/targets/armvirt/64/openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+            sdk_dir: "openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64"
           - target: aarch64_cortex-a72
             arch: aarch64
             subtarget: cortex-a72
+            sdk_url: "https://downloads.openwrt.org/releases/23.05.5/targets/armvirt/64/openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+            sdk_dir: "openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64"
 
     steps:
     - name: Checkout repository
@@ -35,24 +42,10 @@ jobs:
 
     - name: Setup OpenWRT SDK
       run: |
-        # Download OpenWRT SDK for the target architecture
-        if [ "${{ matrix.arch }}" = "mips" ]; then
-          SDK_URL="https://downloads.openwrt.org/releases/23.05.5/targets/ramips/mt7628/openwrt-sdk-23.05.5-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
-          SDK_DIR="openwrt-sdk-23.05.5-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64"
-        elif [ "${{ matrix.arch }}" = "mipsel" ]; then
-          SDK_URL="https://downloads.openwrt.org/releases/23.05.5/targets/ramips/mt7628/openwrt-sdk-23.05.5-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
-          SDK_DIR="openwrt-sdk-23.05.5-ramips-mt7628_gcc-12.3.0_musl.Linux-x86_64"
-        elif [ "${{ matrix.arch }}" = "arm" ]; then
-          SDK_URL="https://downloads.openwrt.org/releases/23.05.5/targets/armvirt/64/openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
-          SDK_DIR="openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64"
-        elif [ "${{ matrix.arch }}" = "aarch64" ]; then
-          SDK_URL="https://downloads.openwrt.org/releases/23.05.5/targets/armvirt/64/openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
-          SDK_DIR="openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64"
-        fi
-        
-        wget -q "$SDK_URL"
-        tar -xf "$(basename $SDK_URL)"
-        mv "$SDK_DIR" openwrt-sdk
+        echo "Downloading SDK for ${{ matrix.target }}..."
+        wget -q "${{ matrix.sdk_url }}"
+        tar -xf "$(basename ${{ matrix.sdk_url }})"
+        mv "${{ matrix.sdk_dir }}" openwrt-sdk
         echo "SDK_DIR=openwrt-sdk" >> $GITHUB_ENV
 
     - name: Setup build environment
@@ -67,7 +60,24 @@ jobs:
         cd openwrt-sdk
         make defconfig
         echo "CONFIG_PACKAGE_airplay2-lite=y" >> .config
+        echo "CONFIG_PACKAGE_libopenssl=y" >> .config
+        echo "CONFIG_PACKAGE_libavahi-client=y" >> .config
+        echo "CONFIG_PACKAGE_libavahi-common=y" >> .config
+        echo "CONFIG_PACKAGE_libdaemon=y" >> .config
+        echo "CONFIG_PACKAGE_alsa-lib=y" >> .config
         make defconfig
+
+    - name: Debug build environment
+      run: |
+        cd openwrt-sdk
+        echo "Build environment info:"
+        echo "Target: ${{ matrix.target }}"
+        echo "Architecture: ${{ matrix.arch }}"
+        echo "Subtarget: ${{ matrix.subtarget }}"
+        echo "Available packages:"
+        ls -la bin/packages/*/base/ | head -10
+        echo "Package directory structure:"
+        find . -name "*airplay*" -type f
 
     - name: Build package
       run: |
@@ -80,6 +90,7 @@ jobs:
         name: airplay2-lite-${{ matrix.target }}
         path: openwrt-sdk/bin/packages/*/base/airplay2-lite_*.ipk
         retention-days: 30
+      if: always()  # Upload even if build fails for debugging
 
   create-release:
     if: github.event_name == 'release'

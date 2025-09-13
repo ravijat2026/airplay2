@@ -9,6 +9,12 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os -ffunction-sections -fdata-sections")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Os -ffunction-sections -fdata-sections")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections")
 
+# Check for MIPS architecture
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "mips")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mips32r2 -mtune=24kc")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mips32r2 -mtune=24kc")
+endif()
+
 # Find required packages
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(AVAHI REQUIRED avahi-client avahi-common)
